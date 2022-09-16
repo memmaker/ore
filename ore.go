@@ -57,7 +57,6 @@ func loadModelsFromString(jsonString string) {
 func ensureModels() {
 	diskModelString := loadFileIfRecent(modelFile)
 	if diskModelString == "" {
-		fmt.Println("Re-loading models...")
 		diskModelString = loadModelsFromAPI()
 	}
 	loadModelsFromString(diskModelString)
