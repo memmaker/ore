@@ -5,18 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 )
 
 var endPoint = ValueOrDefault(os.Getenv("CRUDE_API_ENDPOINT"), "https://proxyman.local:8080")
 var apiKey = ValueOrDefault(os.Getenv("CRUDE_API_KEY"), "crude_api_key")
-var workdir = path.Join(getHome(), ".crude")
-var modelFile = path.Join(workdir, "model_cache.json")
-var etagDir = path.Join(workdir, "etag_cache")
 
 func ensureDirExists(dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -24,47 +19,21 @@ func ensureDirExists(dir string) {
 	}
 }
 
-func getHome() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "."
-	}
-	return homeDir
-}
-
-var modelNames []string
-var models map[string]Model
-
 func getFieldTypes() string {
 	response := queryRequest(apiKey, endPoint+"/models/fields")
 	return response.Body
 }
 
-func loadModelsFromAPI() string {
-	response := queryRequest(apiKey, endPoint+"/models/browse")
-	err := saveToDisk(modelFile, response.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return response.Body
-}
-
-func loadModelsFromString(jsonString string) {
+func loadModelsFromAPI() ModelInfos {
+	apiResponse := queryRequest(apiKey, endPoint+"/models/browse")
 	var response ModelResponse
-	json.Unmarshal([]byte(jsonString), &response)
-	modelNames = response.ModelNames
-	models = response.Models
+	json.Unmarshal([]byte(apiResponse.Body), &response)
+	return ModelInfos{Models: response.Models, ModelNames: response.ModelNames}
 }
 
-func ensureModels() {
-	diskModelString := loadFileIfRecent(modelFile)
-	if diskModelString == "" {
-		diskModelString = loadModelsFromAPI()
-	}
-	loadModelsFromString(diskModelString)
-	if len(modelNames) == 0 {
-		log.Fatal("No models found")
-	}
+type ModelInfos struct {
+	Models     map[string]Model
+	ModelNames []string
 }
 
 func browse(modelName string, page int) string {
@@ -74,27 +43,7 @@ func browse(modelName string, page int) string {
 
 func read(compoundID string) string {
 	response := get(endPoint + "/entries/read/" + compoundID)
-	writeETag(compoundID, response.ETag)
 	return response.Body
-}
-
-func writeETag(id string, tag string) {
-	fileName := path.Join(etagDir, id)
-	// get the directory name of filename
-	dirName := path.Dir(fileName)
-	ensureDirExists(dirName)
-	err := saveToDisk(fileName, tag)
-	if err != nil {
-		log.Fatal("Writing etag: " + err.Error())
-	}
-	fmt.Println("Writing etag " + tag + " to " + fileName)
-}
-
-func loadETag(id string) string {
-	fileName := path.Join(etagDir, id)
-	etag := readFile(fileName)
-	fmt.Println("Loading etag for " + id + " etag: " + etag)
-	return etag
 }
 
 func delete(compoundID string) string {
@@ -102,14 +51,18 @@ func delete(compoundID string) string {
 	return response.Body
 }
 
-func save(identifier string, data JsonObject) string {
-	isUpdate := identifier != ""
-	var response ResourceResult
-	if isUpdate {
-		etag := loadETag(identifier)
-		response = postUpdate(endPoint+"/entries/"+identifier, toJson(data), etag)
+func save(compoundIDOrModel string, data JsonObject) string {
+	var etag string
+	var ok bool
+	if etag, ok = data["_etag"].(string); ok {
 	} else {
-		response = post(endPoint+"/entries/"+identifier, toJson(data))
+		etag = ""
+	}
+	var response ResourceResult
+	if etag != "" {
+		response = postUpdate(endPoint+"/entries/"+compoundIDOrModel, toJson(data), etag)
+	} else {
+		response = post(endPoint+"/entries/"+compoundIDOrModel, toJson(data))
 	}
 
 	responseObject := parseJson(response.Body)
@@ -118,38 +71,30 @@ func save(identifier string, data JsonObject) string {
 	if entryId == "" {
 		return ""
 	}
-	// check if identifier contains a slash somewhere
-
-	if isUpdate {
-		writeETag(identifier, response.ETag)
-		return identifier
+	// check if compoundIDOrModel contains a slash somewhere
+	var cid string
+	if strings.Contains(compoundIDOrModel, "/") {
+		cid = compoundIDOrModel
+	} else {
+		cid = compoundIDOrModel + "/" + entryId
 	}
-	cid := identifier + "/" + entryId
-	writeETag(cid, response.ETag)
+
 	fmt.Println("Saving of " + cid + " returned " + response.ETag)
 	return cid
 }
 
 func main() {
-	ensureDirExists(workdir)
-	ensureDirExists(etagDir)
-	ensureModels()
-
-	//createTestData()
-	//fmt.Println(modelNames)
-
-	// check for command line arguments
 	if len(os.Args) > 1 {
 		// save, read, browse, delete
 		if os.Args[1] == "save" {
-			identifierOrModel := os.Args[2]
+			compoundIDOrModel := os.Args[2]
 			jsonString := os.Args[3]
 			if jsonString == "-" {
-				streamCSV(identifierOrModel)
+				streamCSV(compoundIDOrModel)
 				os.Exit(0)
 			}
 			data := parseJson(jsonString)
-			id := save(identifierOrModel, data)
+			id := save(compoundIDOrModel, data)
 			if id == "" {
 				os.Exit(1)
 			}
@@ -169,8 +114,9 @@ func main() {
 			pprint(response)
 		} else if os.Args[1] == "models" {
 			var listOfModels []Model
-			for _, modelName := range modelNames {
-				listOfModels = append(listOfModels, models[modelName])
+			modelInfos := loadModelsFromAPI()
+			for _, modelName := range modelInfos.ModelNames {
+				listOfModels = append(listOfModels, modelInfos.Models[modelName])
 			}
 			jsonStringOfModels := toJson(listOfModels)
 			pprint(jsonStringOfModels)
@@ -210,11 +156,11 @@ func streamDelete() {
 	}
 }
 
-func streamCSV(model string) {
-	fmt.Println("Streaming CSV from stdin to " + model)
+func streamCSV(compoundIDOrModel string) {
+	fmt.Println("Streaming CSV from stdin to " + compoundIDOrModel)
 	r := io.ReadCloser(os.Stdin)
 	defer r.Close()
-	result := postStream(endPoint+"/imports/"+model, r)
+	result := postStream(endPoint+"/imports/"+compoundIDOrModel, r)
 	fmt.Println(result)
 }
 
