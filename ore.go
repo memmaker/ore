@@ -3,14 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
 	"strconv"
-	"strings"
 )
 
-var endPoint = ValueOrDefault(os.Getenv("CRUDE_API_ENDPOINT"), "http://localhost:8080")
+var endPoint = ValueOrDefault(os.Getenv("CRUDE_API_ENDPOINT"), "https://proxyman.local:8080")
 var apiKey = ValueOrDefault(os.Getenv("CRUDE_API_KEY"), "crude_api_key")
 var workdir = path.Join(getHome(), ".crude")
 var modelFile = path.Join(workdir, "model_cache.json")
@@ -66,12 +66,12 @@ func ensureModels() {
 }
 
 func browse(modelName string, page int) string {
-	response := get(endPoint + "/entries/" + modelName + "?page=" + fmt.Sprintf("%d", page))
+	response := get(endPoint + "/entries/read/" + modelName + "?page=" + fmt.Sprintf("%d", page))
 	return response.Body
 }
 
 func read(compoundID string) string {
-	response := get(endPoint + "/entries/" + compoundID)
+	response := get(endPoint + "/entries/read/" + compoundID)
 	writeETag(compoundID, response.ETag)
 	return response.Body
 }
@@ -101,7 +101,7 @@ func delete(compoundID string) string {
 }
 
 func save(identifier string, data JsonObject) string {
-	isUpdate := strings.Contains(identifier, "/")
+	isUpdate := identifier != ""
 	var response ResourceResult
 	if isUpdate {
 		etag := loadETag(identifier)
@@ -140,11 +140,14 @@ func main() {
 	if len(os.Args) > 1 {
 		// save, read, browse, delete
 		if os.Args[1] == "save" {
-			identifier := os.Args[2]
+			identifierOrModel := os.Args[2]
 			jsonString := os.Args[3]
-
+			if jsonString == "-" {
+				streamCSV(identifierOrModel)
+				os.Exit(0)
+			}
 			data := parseJson(jsonString)
-			id := save(identifier, data)
+			id := save(identifierOrModel, data)
 			if id == "" {
 				os.Exit(1)
 			}
@@ -179,6 +182,22 @@ func main() {
 			pprint(response)
 		}
 	}
+	fmt.Println("Usage: ")
+	fmt.Println("  models:  " + os.Args[0] + " models")
+	fmt.Println("  fields:  " + os.Args[0] + " fields")
+	fmt.Println("  browse:  " + os.Args[0] + " browse <model> [page]")
+	fmt.Println("  read:    " + os.Args[0] + " read <compoundID>")
+	fmt.Println("  save:    " + os.Args[0] + " save <model> <json>")
+	fmt.Println("  delete:  " + os.Args[0] + " delete <compoundID>")
+
+}
+
+func streamCSV(model string) {
+	fmt.Println("Streaming CSV from stdin to " + model)
+	r := io.ReadCloser(os.Stdin)
+	defer r.Close()
+	result := postStream(endPoint+"/imports/"+model, r)
+	fmt.Println(result)
 }
 
 func pprint(jsonString string) {
