@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 )
 
 var endPoint = ValueOrDefault(os.Getenv("CRUDE_API_ENDPOINT"), "https://proxyman.local:8080")
@@ -177,9 +179,15 @@ func main() {
 			pprint(response)
 		} else if os.Args[1] == "delete" {
 			compoundID := os.Args[2]
-			response := delete(compoundID)
-			fmt.Println(response)
-			pprint(response)
+			if compoundID == "-" {
+				streamDelete()
+				os.Exit(0)
+			} else if strings.Contains(compoundID, "/") {
+				response := delete(compoundID)
+				pprint(response)
+				os.Exit(0)
+			}
+			os.Exit(1)
 		}
 	}
 	fmt.Println("Usage: ")
@@ -190,6 +198,16 @@ func main() {
 	fmt.Println("  save:    " + os.Args[0] + " save <model> <json>")
 	fmt.Println("  delete:  " + os.Args[0] + " delete <compoundID>")
 
+}
+
+func streamDelete() {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.Contains(line, "/") {
+			pprint(delete(line))
+		}
+	}
 }
 
 func streamCSV(model string) {
