@@ -18,11 +18,15 @@ type ResourceResult struct {
 }
 
 func post(url string, body string) ResourceResult {
+	return modifyRequest(http.MethodPost, url, apiKey, bytes.NewBuffer([]byte(body)), "")
+}
+
+func postStream(url string, body io.Reader) ResourceResult {
 	return modifyRequest(http.MethodPost, url, apiKey, body, "")
 }
 
 func postUpdate(url string, body string, etag string) ResourceResult {
-	return modifyRequest(http.MethodPost, url, apiKey, body, etag)
+	return modifyRequest(http.MethodPost, url, apiKey, bytes.NewBuffer([]byte(body)), etag)
 }
 
 func get(url string) ResourceResult {
@@ -30,7 +34,7 @@ func get(url string) ResourceResult {
 }
 
 func httpDelete(url string) ResourceResult {
-	return modifyRequest(http.MethodDelete, url, apiKey, "", "")
+	return modifyRequest(http.MethodDelete, url, apiKey, bytes.NewBuffer([]byte("")), "")
 }
 
 func queryRequest(apiKey string, url string) ResourceResult {
@@ -54,10 +58,11 @@ func queryRequest(apiKey string, url string) ResourceResult {
 	return ResourceResult{Success: true, Body: string(buffer), ETag: etag}
 }
 
-func modifyRequest(httpMethod string, url string, apiKey string, body string, etag string) ResourceResult {
+func modifyRequest(httpMethod string, url string, apiKey string, body io.Reader, etag string) ResourceResult {
 	client := &http.Client{}
-	request, err := http.NewRequest(httpMethod, url, bytes.NewBuffer([]byte(body)))
+	request, err := http.NewRequest(httpMethod, url, body)
 	if err != nil {
+		fmt.Println("Error creating request: " + err.Error())
 		return ResourceResult{Success: false, Error: err}
 	}
 	request.Header.Set("Content-Type", "application/json")
@@ -68,14 +73,17 @@ func modifyRequest(httpMethod string, url string, apiKey string, body string, et
 	}
 	resp, err := client.Do(request)
 	if err != nil {
+		fmt.Println("Error: " + err.Error())
 		return ResourceResult{Success: false, Error: err}
 	}
 	defer resp.Body.Close()
 	buffer, err := io.ReadAll(resp.Body)
 	if err != nil {
+		fmt.Println("Error reading response body: " + err.Error())
 		return ResourceResult{Success: false, Error: err}
 	}
 	newETag := resp.Header.Get("ETag")
+	fmt.Println("body: " + string(buffer))
 	return ResourceResult{Success: true, Body: string(buffer), ETag: newETag}
 }
 
