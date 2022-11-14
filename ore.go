@@ -11,24 +11,41 @@ import (
 
 var endPoint = ValueOrDefault(os.Getenv("CRUDE_API_ENDPOINT"), "https://proxyman.local:8080")
 var apiKey = ValueOrDefault(os.Getenv("CRUDE_API_KEY"), "crude_api_key")
+var sessionToken = ValueOrDefault(os.Getenv("CRUDE_SESSION_TOKEN"), "")
 
 func main() {
 	if len(os.Args) > 1 {
 		// save, read, browse, deleteEntry
 		if os.Args[1] == "save" {
-			modelName := os.Args[2]
-			response := streamEntriesFromStdin(modelName)
+			var format, modelName string
+			if len(os.Args) == 3 {
+				format = "tsv"
+				modelName = os.Args[2]
+			} else if len(os.Args) == 4 {
+				format = os.Args[2]
+				modelName = os.Args[3]
+			}
+			response := streamEntriesFromStdin(modelName, format)
 			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "save-models" {
 			fmt.Println(saveModelsFromStdin())
+			os.Exit(0)
 		} else if os.Args[1] == "read" {
 			compoundID := os.Args[2]
 			response := readEntry(compoundID)
 			fmt.Println(response)
-		} else if os.Args[1] == "browse" {
+			os.Exit(0)
+		} else if os.Args[1] == "browse" && len(os.Args) > 2 {
+			format := "tsv"
 			query := os.Args[2]
-			response := browse(query)
+			if len(os.Args) > 3 {
+				format = os.Args[2]
+				query = os.Args[3]
+			}
+			response := browse(query, format)
 			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "models" {
 			modelName := ""
 			if len(os.Args) > 2 {
@@ -36,13 +53,16 @@ func main() {
 			}
 			modelInfos := getModels(modelName)
 			fmt.Println(modelInfos)
+			os.Exit(0)
 		} else if os.Args[1] == "relation" {
 			relationExpression := os.Args[2]
 			response := getRelation(relationExpression)
 			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "fields" {
 			response := getFieldTypes()
 			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "delete" {
 			compoundID := os.Args[2]
 			if compoundID == "-" {
@@ -73,7 +93,7 @@ func readEntry(compoundID string) string {
 		format = parts[0]
 		compoundID = parts[1]
 	}
-	response := get(endPoint + "/entries/read/" + compoundID + "?format=" + format)
+	response := get(endPoint + "/z/read/" + compoundID + "?format=" + format)
 	return response.Body
 }
 
@@ -91,16 +111,15 @@ func saveModelsFromStdin() string {
 	return response.Body
 }
 
-func streamEntriesFromStdin(modelName string) string {
-	fmt.Println("Streaming data from stdin to " + modelName)
+func streamEntriesFromStdin(modelNameOrCompoundID string, format string) string {
 	r := io.ReadCloser(os.Stdin)
 	defer r.Close()
-	result := postStream(endPoint+"/z/save/"+modelName, r)
+	result := postStream(endPoint+"/z/save/"+modelNameOrCompoundID+"?format="+format, r)
 	return result.Body
 }
 
 func getFieldTypes() string {
-	response := queryRequest(apiKey, endPoint+"/models/fields")
+	response := queryRequest(getAuthenticator(), endPoint+"/models/fields")
 	return response.Body
 }
 
@@ -109,17 +128,17 @@ func getModels(modelName string) string {
 	if modelName != "" {
 		endpointURL += "/" + modelName
 	}
-	apiResponse := queryRequest(apiKey, endpointURL)
+	apiResponse := queryRequest(getAuthenticator(), endpointURL)
 	return apiResponse.Body
 }
 
-func browse(query string) string {
+func browse(query string, format string) string {
 	parts := strings.Split(query, ":")
 	modelName := parts[0]
 	query = strings.Replace(query, modelName+":", "", 1)
 	queryArg := "q=" + url.QueryEscape(query)
-	formatArg := "format=tsv"
-	response := get(endPoint + "/entries/read/" + modelName + "?" + formatArg + "&" + queryArg)
+	formatArg := "format=" + format
+	response := get(endPoint + "/z/read/" + modelName + "?" + formatArg + "&" + queryArg)
 	return response.Body
 }
 
