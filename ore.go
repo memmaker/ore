@@ -41,6 +41,16 @@ func main() {
 			response := readEntry(compoundID)
 			fmt.Println(response)
 			os.Exit(0)
+		} else if os.Args[1] == "read-ids" {
+			format := "tsv"
+			modelName := os.Args[2]
+			if len(os.Args) > 3 {
+				format = os.Args[2]
+				modelName = os.Args[3]
+			}
+			response := readEntriesByIDs(modelName, format)
+			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "query" && len(os.Args) > 2 {
 			format := "tsv"
 			query := os.Args[2]
@@ -92,7 +102,14 @@ func main() {
 	fmt.Println("    delete model: " + os.Args[0] + " delete-model <model-name>")
 	fmt.Println("    fields:       " + os.Args[0] + " fields")
 	fmt.Println("    relation:     " + os.Args[0] + " relation <model-name>.<field-name>")
+	fmt.Println("(s) read-ids:     " + os.Args[0] + " read-ids {format} <model-name>")
 	fmt.Println("Commands marked with (s) will read from stdin.")
+}
+
+func readEntriesByIDs(modelName string, format string) string {
+	r := io.ReadCloser(os.Stdin)
+	result := postStream(endPoint+"/z/read-ids/"+modelName+"?format="+format, r)
+	return result.Body
 }
 
 func deleteModel(modelName string) string {
