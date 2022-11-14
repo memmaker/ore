@@ -31,12 +31,17 @@ func main() {
 		} else if os.Args[1] == "save-models" {
 			fmt.Println(saveModelsFromStdin())
 			os.Exit(0)
+		} else if os.Args[1] == "delete-model" {
+			modelName := os.Args[2]
+			response := deleteModel(modelName)
+			fmt.Println(response)
+			os.Exit(0)
 		} else if os.Args[1] == "read" {
 			compoundID := os.Args[2]
 			response := readEntry(compoundID)
 			fmt.Println(response)
 			os.Exit(0)
-		} else if os.Args[1] == "browse" && len(os.Args) > 2 {
+		} else if os.Args[1] == "query" && len(os.Args) > 2 {
 			format := "tsv"
 			query := os.Args[2]
 			if len(os.Args) > 3 {
@@ -84,6 +89,11 @@ func main() {
 	fmt.Println("  save:    " + os.Args[0] + " save <model> <json>")
 	fmt.Println("  delete:  " + os.Args[0] + " deleteEntry <compoundID>")
 
+}
+
+func deleteModel(modelName string) string {
+	response := httpDelete(endPoint + "/models/delete/" + modelName)
+	return response.Body
 }
 
 func readEntry(compoundID string) string {
