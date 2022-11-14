@@ -69,12 +69,11 @@ func main() {
 			fmt.Println(response)
 			os.Exit(0)
 		} else if os.Args[1] == "delete" {
-			compoundID := os.Args[2]
-			if compoundID == "-" {
+			if len(os.Args) == 2 {
 				deleteFromStdin()
 				os.Exit(0)
-			} else if strings.Contains(compoundID, "/") {
-				response := deleteEntry(compoundID)
+			} else if strings.Contains(os.Args[2], "/") {
+				response := deleteEntry(os.Args[2])
 				fmt.Println(response)
 				os.Exit(0)
 			}
@@ -82,13 +81,18 @@ func main() {
 		}
 	}
 	fmt.Println("Usage: ")
-	fmt.Println("  models:  " + os.Args[0] + " models")
-	fmt.Println("  fields:  " + os.Args[0] + " fields")
-	fmt.Println("  browse:  " + os.Args[0] + " browse <model> [page]")
-	fmt.Println("  read:    " + os.Args[0] + " read <compoundID>")
-	fmt.Println("  save:    " + os.Args[0] + " save <model> <json>")
-	fmt.Println("  delete:  " + os.Args[0] + " deleteEntry <compoundID>")
-
+	fmt.Println("    query:        " + os.Args[0] + " query {format} <model-name>:<query>")
+	fmt.Println("    read:         " + os.Args[0] + " read {format:}<compound-id>")
+	fmt.Println("(s) save:         " + os.Args[0] + " save {format} <model-name>")
+	fmt.Println("    models:       " + os.Args[0] + " models")
+	fmt.Println("    models:       " + os.Args[0] + " models <model-name>")
+	fmt.Println("(s) save models:  " + os.Args[0] + " save-models")
+	fmt.Println("    delete:       " + os.Args[0] + " delete <compound-id>")
+	fmt.Println("(s) delete:       " + os.Args[0] + " delete")
+	fmt.Println("    delete model: " + os.Args[0] + " delete-model <model-name>")
+	fmt.Println("    fields:       " + os.Args[0] + " fields")
+	fmt.Println("    relation:     " + os.Args[0] + " relation <model-name>.<field-name>")
+	fmt.Println("Commands marked with (s) will read from stdin.")
 }
 
 func deleteModel(modelName string) string {
