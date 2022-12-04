@@ -93,6 +93,7 @@ func main() {
 	fmt.Println("Usage: ")
 	fmt.Println("    query:        " + os.Args[0] + " query {format} <model-name>:<query>")
 	fmt.Println("    read:         " + os.Args[0] + " read {format:}<compound-id>")
+	fmt.Println("(s) read-ids:     " + os.Args[0] + " read-ids {format} <model-name>")
 	fmt.Println("(s) save:         " + os.Args[0] + " save {format} <model-name>")
 	fmt.Println("    models:       " + os.Args[0] + " models")
 	fmt.Println("    models:       " + os.Args[0] + " models <model-name>")
@@ -102,7 +103,6 @@ func main() {
 	fmt.Println("    delete model: " + os.Args[0] + " delete-model <model-name>")
 	fmt.Println("    fields:       " + os.Args[0] + " fields")
 	fmt.Println("    relation:     " + os.Args[0] + " relation <model-name>.<field-name>")
-	fmt.Println("(s) read-ids:     " + os.Args[0] + " read-ids {format} <model-name>")
 	fmt.Println("Commands marked with (s) will read from stdin.")
 }
 
